@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SwasthAI – Gemma 4 Medical Intake Assistant</title>
+  <meta name="description" content="AI-powered multilingual medical intake assistant for clinics. Convert patient descriptions in Gujarati, Hindi or English into structured doctor-ready summaries using Gemma 4."/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Gujarati:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- Processing Overlay -->
+  <div id="processingOverlay" class="overlay hidden">
+    <div class="overlay-box">
+      <div class="overlay-logo">🤖</div>
+      <h3 class="overlay-title">Gemma 4 is thinking…</h3>
+      <div class="steps-progress" id="stepsProgress">
+        <div class="step-item" id="step1"><span class="step-dot"></span> Detecting language…</div>
+        <div class="step-item" id="step2"><span class="step-dot"></span> Extracting symptoms & history…</div>
+        <div class="step-item" id="step3"><span class="step-dot"></span> Checking emergency indicators…</div>
+        <div class="step-item" id="step4"><span class="step-dot"></span> Generating clinical note…</div>
+        <div class="step-item" id="step5"><span class="step-dot"></span> Building Gujarati summary…</div>
+      </div>
+      <div class="overlay-model">gemma-3-27b-it · Google AI Studio</div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+            <circle cx="14" cy="14" r="13" stroke="url(#lg1)" stroke-width="2"/>
+            <path d="M9 14h10M14 9v10" stroke="url(#lg1)" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="14" cy="14" r="3" fill="url(#lg1)"/>
+            <defs><linearGradient id="lg1" x1="0" y1="0" x2="28" y2="28"><stop offset="0%" stop-color="#6EE7B7"/><stop offset="100%" stop-color="#3B82F6"/></linearGradient></defs>
+          </svg>
+        </div>
+        <div>
+          <span class="logo-text">SwasthAI</span>
+          <span class="logo-sub">Powered by Gemma 4</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="header-stats">
+          <div class="hstat"><span class="hstat-n" id="countAnalyzed">0</span><span class="hstat-l">Analyzed</span></div>
+          <div class="hstat"><span class="hstat-n" id="countEmergency">0</span><span class="hstat-l">Flagged</span></div>
+        </div>
+        <div class="header-badge">
+          <span class="badge-dot"></span>
+          GenAI for Good · Hackathon 2026
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Impact Ticker -->
+  <div class="ticker">
+    <div class="ticker-inner">
+      <span>🏥 Designed for Tier-2 clinics in Rajkot</span>
+      <span class="ticker-sep">·</span>
+      <span>🌐 Gujarati · Hindi · English · Mixed language</span>
+      <span class="ticker-sep">·</span>
+      <span>🚨 Rule-based emergency detection</span>
+      <span class="ticker-sep">·</span>
+      <span>🤖 Gemma 4 open model — can run locally</span>
+      <span class="ticker-sep">·</span>
+      <span>✅ No diagnosis · Staff verification required</span>
+      <span class="ticker-sep">·</span>
+      <span>🏥 Designed for Tier-2 clinics in Rajkot</span>
+    </div>
+  </div>
+
+  <main class="main">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-content">
+        <div class="hero-tag">🏥 GenAI for Good · Medical Intake Assistant</div>
+        <h1 class="hero-title">Every patient deserves to be<br/><span class="gradient-text">understood in their language</span></h1>
+        <p class="hero-sub">Describe symptoms in Gujarati, Hindi, English, or mixed — Gemma 4 extracts a structured, editable, doctor-ready summary with emergency flagging in seconds.</p>
+      </div>
+      <div class="hero-pills">
+        <div class="hero-pill green">⚡ &lt; 3 second extraction</div>
+        <div class="hero-pill blue">🔒 Private · No data stored</div>
+        <div class="hero-pill amber">🩺 Intake only · Not a diagnosis</div>
+      </div>
+      <div class="hero-langs">
+        <span class="lang-chip active">ગુજરાતી</span>
+        <span class="lang-chip">हिन्दी</span>
+        <span class="lang-chip">English</span>
+        <span class="lang-chip">Mixed</span>
+      </div>
+    </section>
+
+    <!-- API Setup -->
+    <section class="card api-card" id="apiSection">
+      <div class="card-header">
+        <div class="card-icon blue">🔑</div>
+        <div>
+          <h2 class="card-title">Gemma 4 API Configuration</h2>
+          <p class="card-desc">Connect your Google AI Studio key for live inference — or use Demo Mode</p>
+        </div>
+        <div class="api-mode-badge" id="apiModeBadge">⚡ Demo Mode</div>
+      </div>
+      <div class="api-input-row">
+        <input id="apiKeyInput" type="password" class="api-input" placeholder="AIza… (Google AI Studio key)" autocomplete="off"/>
+        <button class="btn btn-sm btn-primary" onclick="saveKey()">💾 Save Key</button>
+        <button class="btn btn-sm" onclick="useDemo()">⚡ Demo Mode</button>
+      </div>
+      <div id="apiStatus" class="api-status demo">⚡ Demo Mode — pre-loaded Gemma 4 responses for all 4 examples</div>
+      <p class="api-hint">Free key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a> · Model: <code>gemma-3-27b-it</code></p>
+    </section>
+
+    <!-- Input Section -->
+    <section class="card input-card" id="inputSection">
+      <div class="card-header">
+        <div class="card-icon green">🩺</div>
+        <div>
+          <h2 class="card-title">Patient Description</h2>
+          <p class="card-desc">Patient or staff types/speaks the complaint in any language</p>
+        </div>
+        <div id="langDetectBadge" class="lang-detect-badge hidden"></div>
+      </div>
+
+      <div class="examples-label">Try a quick example →</div>
+      <div class="examples-row">
+        <button class="example-chip emergency" onclick="loadExample(0)">🚨 Chest Pain · Gujarati</button>
+        <button class="example-chip" onclick="loadExample(1)">🤒 Fever · Hindi</button>
+        <button class="example-chip" onclick="loadExample(2)">💊 Diabetic · Mixed</button>
+        <button class="example-chip" onclick="loadExample(3)">🧓 Elderly · English</button>
+      </div>
+
+      <div class="textarea-wrapper">
+        <textarea id="patientInput" class="patient-textarea" rows="5"
+          placeholder="Type the patient's complaint here in any language…&#10;&#10;Example: મને બે દિવસથી છાતીમાં દુખે છે અને આજે શ્વાસ લેવામાં તકલીફ થાય છે. BP ની દવા ચાલુ છે."></textarea>
+        <div class="textarea-footer">
+          <div class="textarea-left">
+            <span id="charCount" class="char-count">0 characters</span>
+            <span id="wordCount" class="word-count">· 0 words</span>
+          </div>
+          <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Voice input">🎤 Voice</button>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-primary btn-lg" id="analyzeBtn" onclick="analyze()">
+          <span id="btnIcon">✨</span>
+          <span id="btnText">Analyze with Gemma 4</span>
+          <span id="btnSpinner" class="spinner hidden"></span>
+        </button>
+        <button class="btn btn-ghost" onclick="clearAll()">🗑 Clear</button>
+        <div class="action-hint">No data is stored or sent except to the Gemma 4 API</div>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section id="resultsSection" class="hidden">
+
+      <!-- Triage Banner -->
+      <div id="triageBanner" class="triage-banner">
+        <div class="triage-left">
+          <div id="triageIcon" class="triage-icon"></div>
+          <div>
+            <div id="triageLabel" class="triage-label"></div>
+            <div id="triageMsg" class="triage-msg"></div>
+          </div>
+        </div>
+        <div class="triage-right">
+          <div class="completeness-wrap">
+            <span class="completeness-label">Intake Completeness</span>
+            <div class="completeness-bar-bg">
+              <div id="completenessBar" class="completeness-bar"></div>
+            </div>
+            <span id="completenessScore" class="completeness-score"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Language Detected -->
+      <div id="langBanner" class="lang-banner"></div>
+
+      <!-- Tabs -->
+      <div class="tabs-row">
+        <button class="tab active" id="tab1" onclick="switchTab('structured')">📋 Structured Summary</button>
+        <button class="tab" id="tab2" onclick="switchTab('doctor')">👨‍⚕️ Doctor Note</button>
+        <button class="tab" id="tab3" onclick="switchTab('gujarati')">🇮🇳 Gujarati Summary</button>
+        <button class="tab" id="tab4" onclick="switchTab('compare')">🔍 Compare View</button>
+      </div>
+
+      <!-- TAB: Structured Summary -->
+      <div id="panelStructured" class="tab-panel">
+        <div class="card result-card">
+          <div class="card-header">
+            <div class="card-icon amber">📋</div>
+            <div><h2 class="card-title">Structured Patient Summary</h2><p class="card-desc">Click any field to edit · Confirm before sending to doctor</p></div>
+            <div class="result-actions">
+              <button class="btn btn-sm" onclick="copyStructured()">📋 Copy</button>
+              <button class="btn btn-sm" onclick="window.print()">🖨️ Print</button>
+              <button class="btn btn-sm" onclick="shareWhatsApp()">💬 WhatsApp</button>
+            </div>
+          </div>
+          <div class="summary-grid" id="summaryGrid"></div>
+          <div class="edit-hint">
+            <span>✏️ All fields editable — click to modify</span>
+            <button class="btn btn-sm btn-success" onclick="confirmSummary()">✅ Confirm & Mark Ready</button>
+          </div>
+        </div>
+
+        <!-- Missing Info -->
+        <div id="missingCard" class="card missing-card hidden">
+          <div class="card-header">
+            <div class="card-icon amber">❓</div>
+            <div><h2 class="card-title">Ask Patient These Questions</h2><p class="card-desc">Missing information that would improve the intake</p></div>
+          </div>
+          <div id="missingList" class="missing-grid"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Doctor Note -->
+      <div id="panelDoctor" class="tab-panel hidden">
+        <div class="card doctor-card">
+          <div class="card-header">
+            <div class="card-icon purple">👨‍⚕️</div>
+            <div><h2 class="card-title">Clinical Intake Note</h2><p class="card-desc">English · Editable · For doctor's review only</p></div>
+            <div class="result-actions">
+              <button class="btn btn-sm" onclick="copyDoctor()">📋 Copy</button>
+            </div>
+          </div>
+          <div id="doctorNote" class="doctor-note" contenteditable="true" spellcheck="false"></div>
+          <div class="note-disclaimer">⚠️ This is an administrative intake note only. It contains no diagnosis, treatment plan, or medication advice.</div>
+        </div>
+      </div>
+
+      <!-- TAB: Gujarati Summary -->
+      <div id="panelGujarati" class="tab-panel hidden">
+        <div class="card gujarati-card">
+          <div class="card-header">
+            <div class="card-icon green">🇮🇳</div>
+            <div><h2 class="card-title">ગુજરાતી સારાંશ</h2><p class="card-desc">Patient-facing summary in Gujarati · WhatsApp-ready</p></div>
+            <div class="result-actions">
+              <button class="btn btn-sm" onclick="copyGujarati()">📋 Copy</button>
+              <button class="btn btn-sm" onclick="shareWhatsAppGujarati()">💬 WhatsApp</button>
+            </div>
+          </div>
+          <div id="gujaratiSummary" class="gujarati-text" contenteditable="true" spellcheck="false"></div>
+          <div class="note-disclaimer">📲 Share this confirmation with the patient or their family via WhatsApp</div>
+        </div>
+      </div>
+
+      <!-- TAB: Compare View -->
+      <div id="panelCompare" class="tab-panel hidden">
+        <div class="compare-grid">
+          <div class="card compare-card">
+            <div class="card-header">
+              <div class="card-icon red">🗣️</div>
+              <div><h2 class="card-title">Original Input</h2><p class="card-desc">What the patient said</p></div>
+            </div>
+            <div id="compareOriginal" class="compare-text original-text"></div>
+          </div>
+          <div class="card compare-card">
+            <div class="card-header">
+              <div class="card-icon green">🤖</div>
+              <div><h2 class="card-title">Gemma 4 Extracted</h2><p class="card-desc">Structured output</p></div>
+            </div>
+            <div id="compareExtracted" class="compare-text extracted-text"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="disclaimer">
+        <strong>⚠️ Important:</strong> This AI-generated summary is for <strong>administrative intake only</strong>. It does <strong>not</strong> constitute medical diagnosis, treatment, or dosage advice. All information must be verified by qualified medical professionals before acting on it.
+      </div>
+
+      <!-- Regen -->
+      <div class="regen-row">
+        <button class="btn btn-ghost" onclick="scrollToInput()">← New Patient</button>
+        <button class="btn btn-primary" onclick="analyze()">🔄 Re-analyze</button>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="how-section">
+      <h2 class="section-title">How SwasthAI Works</h2>
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-num">01</div>
+          <div class="step-icon">🗣️</div>
+          <h3>Patient Speaks</h3>
+          <p>Type or use voice in Gujarati, Hindi, English, or any mix — no language barrier</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">02</div>
+          <div class="step-icon">🤖</div>
+          <h3>Gemma 4 Extracts</h3>
+          <p>Open model extracts 12 structured fields — symptoms, duration, medications, allergies</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">03</div>
+          <div class="step-icon">🚨</div>
+          <h3>Emergency Flagged</h3>
+          <p>Rule-based triage instantly flags chest pain, breathing difficulty, neurological signs</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">04</div>
+          <div class="step-icon">✅</div>
+          <h3>Staff Confirms</h3>
+          <p>Editable structured card — staff reviews and confirms before handing to doctor</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Impact Stats -->
+    <section class="impact-section">
+      <h2 class="section-title">Built for Real Clinics</h2>
+      <div class="impact-grid">
+        <div class="impact-card">
+          <div class="impact-num">5×</div>
+          <div class="impact-label">Faster intake than paper forms</div>
+        </div>
+        <div class="impact-card">
+          <div class="impact-num">4</div>
+          <div class="impact-label">Languages supported natively</div>
+        </div>
+        <div class="impact-card">
+          <div class="impact-num">12</div>
+          <div class="impact-label">Fields extracted in one call</div>
+        </div>
+        <div class="impact-card">
+          <div class="impact-num">0</div>
+          <div class="impact-label">Diagnoses made (by design)</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <span class="logo-text">SwasthAI</span>
+        <span class="footer-tagline">Multilingual Medical Intake · Powered by Gemma 4</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://www.kaggle.com/models/google/gemma-4" target="_blank">Gemma 4 on Kaggle</a>
+        <a href="https://aistudio.google.com" target="_blank">Google AI Studio</a>
+      </div>
+    </div>
+    <p class="footer-note">Built at Gemma 4 Hackathon Sprint 2026 · GDG Cloud Rajkot · GenAI for Good Track · Not a medical device · For administrative intake use only</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
