@@ -4,8 +4,8 @@
    ============================================ */
 
 // ── State ───────────────────────────────────────────────
-let apiKey      = localStorage.getItem('swasthai_key') || '';
-let demoMode    = !apiKey;
+let apiKey      = ''; // hidden for public demo
+let demoMode    = true; // always demo mode for public demo
 let recognition = null;
 let isRecording = false;
 let totalAnalyzed = parseInt(localStorage.getItem('swasthai_count') || '0');
