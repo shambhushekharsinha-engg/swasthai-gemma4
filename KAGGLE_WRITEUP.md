@@ -136,8 +136,8 @@ A closed, cloud-only model would fail in rural clinic settings with slow interne
 
 ## Links
 
-- **Live Demo:** [index.html — open in browser]
-- **Code Repository:** [GitHub link]
+- **Live Demo:** [https://swasthai-gemma4.vercel.app](https://swasthai-gemma4.vercel.app)
+- **Code Repository:** [https://github.com/shambhushekharsinha-engg/swasthai-gemma4](https://github.com/shambhushekharsinha-engg/swasthai-gemma4)
 - **Model Used:** Gemma 4 (`gemma-3-27b-it`) via Google AI Studio
 
 ---
