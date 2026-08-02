@@ -4,17 +4,22 @@
    ============================================ */
 
 // ── State ───────────────────────────────────────────────
-let apiKey        = ''; // hidden for public demo
-let demoMode      = true;  // demo | ollama | live
+let apiKey        = ''; // never persisted to localStorage
+let demoMode      = true;
 let currentMode   = 'demo'; // 'demo' | 'ollama' | 'live'
-let ollamaModel   = 'gemma2'; // ollama model name
-let ollamaBase    = 'http://localhost:11434'; // ollama server
-let recognition = null;
-let isRecording = false;
-let totalAnalyzed = parseInt(localStorage.getItem('swasthai_count') || '0');
+let ollamaModel   = 'gemma2';
+let ollamaBase    = 'http://localhost:11434';
+let recognition   = null;
+let isRecording   = false;
+// Only aggregate counters stored — NO patient data ever in localStorage
+let totalAnalyzed  = parseInt(localStorage.getItem('swasthai_count') || '0');
 let totalEmergency = parseInt(localStorage.getItem('swasthai_emergency') || '0');
 let lastInput   = '';
 let currentTab  = 'structured';
+
+// ── Security: detect HTTPS context (Vercel/production) ──
+// Ollama runs on HTTP localhost — blocked by browsers from HTTPS pages (mixed content).
+const IS_HTTPS = location.protocol === 'https:';
 
 // ── Examples ───────────────────────────────────────────
 const EXAMPLES = [
@@ -134,10 +139,16 @@ function animateImpactNumbers() {
 
 // ── API Setup ───────────────────────────────────────────
 function initApiSection() {
-  // Always start in demo mode (API section is hidden for public)
+  // Always start in demo mode
   setMode('demo');
-  // Check if Ollama is reachable on load
-  checkOllamaStatus();
+  // Only attempt Ollama discovery when NOT on HTTPS (mixed-content restriction)
+  if (!IS_HTTPS) {
+    checkOllamaStatus();
+  } else {
+    // On Vercel/HTTPS: show a helpful note in the Ollama panel
+    const hint = document.getElementById('ollamaModelsHint');
+    if (hint) hint.innerHTML = '⚠️ Running on HTTPS — Ollama (localhost HTTP) is blocked by browsers. <strong>Open the file locally</strong> to use Ollama.';
+  }
 }
 
 function setMode(mode) {
@@ -178,6 +189,10 @@ async function checkOllamaStatus() {
 }
 
 async function switchToOllama() {
+  if (IS_HTTPS) {
+    showToast('⚠️ Ollama requires local (non-HTTPS) access. Open index.html directly.', 'warn');
+    return;
+  }
   const modelInput = document.getElementById('ollamaModelInput');
   if (modelInput && modelInput.value.trim()) ollamaModel = modelInput.value.trim();
   try {
@@ -187,7 +202,7 @@ async function switchToOllama() {
     setMode('ollama');
     showToast('🦙 Connected to Ollama · ' + ollamaModel, 'success');
   } catch (e) {
-    showToast('❌ Ollama not running. Start it with: ollama serve', 'error');
+    showToast('❌ Ollama not running. Run: ollama serve', 'error');
   }
 }
 
@@ -199,9 +214,10 @@ function useDemo() {
 function saveKey() {
   const val = document.getElementById('apiKeyInput')?.value?.trim();
   if (!val) return;
-  apiKey = val; localStorage.setItem('swasthai_key', val);
+  // SECURITY: API key held only in memory — never written to localStorage
+  apiKey = val;
   setMode('live');
-  showToast('✅ API key saved · Live Gemma 4 enabled', 'success');
+  showToast('✅ API key set · Live Gemma 4 enabled (session only)', 'success');
 }
 
 function setApiStatus(msg, cls) {
@@ -362,8 +378,9 @@ async function analyze() {
     updateCounters();
   } catch (err) {
     hideOverlay();
-    console.error(err);
-    showToast('Error: ' + err.message.slice(0, 120) + ' — switching to Demo Mode.', 'error');
+    // SECURITY: log sanitized message only — never log patient input or API keys
+    console.warn('[SwasthAI] Analysis error:', err.message?.slice(0, 60));
+    showToast('Analysis failed — switching to Demo Mode.', 'error');
     setMode('demo');
   } finally {
     setLoading(false);
@@ -387,21 +404,21 @@ async function simulateGemmaResponse(input) {
   const ta = document.getElementById('patientInput');
   const idx = parseInt(ta.dataset.exampleIdx ?? '');
   if (!isNaN(idx) && DEMO_RESPONSES[idx]) return DEMO_RESPONSES[idx];
-  // Generic fallback
+  // Generic fallback — SECURITY: do NOT echo raw patient input into rendered output
   return {
     name: "Not provided", age: "Not provided", gender: "Not specified",
     detected_language: "Unknown",
-    main_complaint: "Patient complaint received (demo mode)",
-    symptoms: ["Symptom description"], duration: "Not specified",
+    main_complaint: "Patient complaint received (custom input — demo mode)",
+    symptoms: ["Use one of the 4 example buttons for a full demo"], duration: "Not specified",
     existing_conditions: [], current_medications: [], allergies: "Not mentioned",
-    missing_info: ["Add your API key for live extraction"],
+    missing_info: ["Connect Ollama locally or use the 4 example buttons above"],
     emergency_flags: [],
-    doctor_note: `Demo Mode — Live Gemma 4 extraction not active.\n\nOriginal: "${input.substring(0,150)}"`,
-    gujarati_summary: `Demo Mode.\n\nLive extraction ઉપલબ્ધ નથી. API key ઉમેરો.`,
+    doctor_note: `Demo Mode — custom inputs show a placeholder.\nUse the example buttons above for a complete structured extraction demo.`,
+    gujarati_summary: `Demo Mode — ઉદાહરણ બટન વાપરો.`,
     is_emergency: false,
     triage_level: "normal",
     emergency_message: "",
-    completeness: 20
+    completeness: 10
   };
 }
 

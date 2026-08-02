@@ -106,7 +106,7 @@
           <h2 class="card-title">Gemma 4 API Configuration</h2>
           <p class="card-desc">Connect your Google AI Studio key for live inference — or use Demo Mode</p>
         </div>
-        <div class="api-mode-badge" id="apiModeBadge">⚡ Demo Mode</div>
+        <div class="api-mode-badge" id="apiModeBadge_hidden">⚡ Demo Mode</div>
       </div>
       <div class="api-input-row">
         <input id="apiKeyInput" type="password" class="api-input" placeholder="AIza… (Google AI Studio key)" autocomplete="off"/>
@@ -146,7 +146,7 @@
         <button class="btn btn-sm btn-success" onclick="switchToOllama()">🦙 Connect Ollama</button>
         <button class="btn btn-sm" onclick="useDemo()">⚡ Demo Mode</button>
       </div>
-      <div class="ollama-models-hint">
+      <div id="ollamaModelsHint" class="ollama-models-hint">
         ✅ Supported: <code>gemma2</code> · <code>llama3.2</code> · <code>mistral</code> · <code>phi3</code> · any Ollama model
       </div>
     </section>
