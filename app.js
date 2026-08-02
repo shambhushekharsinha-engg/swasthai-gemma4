@@ -343,53 +343,7 @@ async function simulateGemmaResponse(input) {
     main_complaint: "Patient complaint received (custom input — demo mode)",
     symptoms: ["Use one of the 4 example buttons for a full demo"], duration: "Not specified",
     existing_conditions: [], current_medications: [], allergies: "Not mentioned",
-    missing_info: ["Connect Ollama locally or use the 4 example buttons above"],
-    emergency_flags: [],
-    doctor_note: `Demo Mode — custom inputs show a placeholder.\nUse the example buttons above for a complete structured extraction demo.`,
-    gujarati_summary: `Demo Mode — ઉદાહરણ બટન વાપરો.`,
-    is_emergency: false,
-    triage_level: "normal",
-    emergency_message: "",
-    completeness: 10
-  };
-}
-
-// ── Ollama Local API ────────────────────────────────────
-async function callOllamaAPI(patientInput) {
-  const SYSTEM = buildSystemPrompt();
-  const body = {
-    model: ollamaModel,
-    messages: [
-      { role: 'system', content: SYSTEM },
-      { role: 'user',   content: 'Patient description:\n\n' + patientInput + '\n\nReturn only valid JSON.' }
-    ],
-    stream: false,
-    format: 'json',
-    options: { temperature: 0.15, num_predict: 1800 }
-  };
-
-  const resp = await fetch(ollamaBase + '/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    const e = await resp.text();
-    throw new Error('Ollama ' + resp.status + ': ' + e.slice(0, 150));
-  }
-  const data = await resp.json();
-  const raw = data.message?.content || data.response || '';
-  if (!raw) throw new Error('Empty response from Ollama');
-  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch(_) {
-    // Try to extract JSON from the response
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('Invalid JSON from Ollama — try a larger model');
-  }
-}
+    missing_info: ["Use the 4 example buttons above or enter an API key"],
 
 // ── Live Gemma 4 API (Google AI Studio) ─────────────────
 async function callGemma4API(patientInput) {
