@@ -4,8 +4,11 @@
    ============================================ */
 
 // ── State ───────────────────────────────────────────────
-let apiKey      = ''; // hidden for public demo
-let demoMode    = true; // always demo mode for public demo
+let apiKey        = ''; // hidden for public demo
+let demoMode      = true;  // demo | ollama | live
+let currentMode   = 'demo'; // 'demo' | 'ollama' | 'live'
+let ollamaModel   = 'gemma2'; // ollama model name
+let ollamaBase    = 'http://localhost:11434'; // ollama server
 let recognition = null;
 let isRecording = false;
 let totalAnalyzed = parseInt(localStorage.getItem('swasthai_count') || '0');
@@ -131,41 +134,84 @@ function animateImpactNumbers() {
 
 // ── API Setup ───────────────────────────────────────────
 function initApiSection() {
-  const saved = localStorage.getItem('swasthai_key');
-  if (saved) {
-    apiKey = saved;
-    demoMode = false;
-    document.getElementById('apiKeyInput').value = saved;
-    setApiStatus('✅ API key loaded · Live Gemma 4 inference enabled', 'ok');
-    setModeBadge(false);
+  // Always start in demo mode (API section is hidden for public)
+  setMode('demo');
+  // Check if Ollama is reachable on load
+  checkOllamaStatus();
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  demoMode = (mode === 'demo');
+  const badge = document.getElementById('apiModeBadge');
+  const modeBar = document.getElementById('modeBar');
+
+  const configs = {
+    demo:   { badge: '⚡ Demo Mode',          badgeCls: '',       barMsg: '⚡ Running in Demo Mode — pre-loaded Gemma 4 responses', barCls: 'demo' },
+    ollama: { badge: '🦙 Ollama · ' + ollamaModel, badgeCls: ' ollama', barMsg: '🦙 Connected to local Ollama (' + ollamaModel + ') — fully offline & free', barCls: 'ok' },
+    live:   { badge: '🟢 Live · Gemma 4',     badgeCls: ' live',  barMsg: '✅ Live Gemma 4 API active', barCls: 'ok' }
+  };
+  const c = configs[mode] || configs.demo;
+  if (badge) { badge.textContent = c.badge; badge.className = 'api-mode-badge' + c.badgeCls; }
+  if (modeBar) { modeBar.textContent = c.barMsg; modeBar.className = 'mode-bar ' + c.barCls; }
+}
+
+async function checkOllamaStatus() {
+  try {
+    const res = await fetch(ollamaBase + '/api/tags', { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) return;
+    const data = await res.json();
+    const models = (data.models || []).map(m => m.name);
+    // Find best matching model
+    const preferred = ['gemma2', 'gemma', 'llama3', 'mistral', 'phi3'];
+    for (const p of preferred) {
+      const found = models.find(m => m.startsWith(p));
+      if (found) { ollamaModel = found; break; }
+    }
+    if (models.length > 0) {
+      setMode('ollama');
+      showToast('🦙 Ollama detected! Using ' + ollamaModel + ' locally', 'success');
+    }
+  } catch (_) {
+    // Ollama not running — stay in demo mode
   }
 }
 
-function saveKey() {
-  const val = document.getElementById('apiKeyInput').value.trim();
-  if (!val) { setApiStatus('❌ Please enter a valid API key', 'err'); return; }
-  apiKey = val; demoMode = false;
-  localStorage.setItem('swasthai_key', val);
-  setApiStatus('✅ Key saved · Live Gemma 4 (gemma-3-27b-it) enabled', 'ok');
-  setModeBadge(false);
+async function switchToOllama() {
+  const modelInput = document.getElementById('ollamaModelInput');
+  if (modelInput && modelInput.value.trim()) ollamaModel = modelInput.value.trim();
+  try {
+    showToast('🦙 Connecting to Ollama…', 'success');
+    const res = await fetch(ollamaBase + '/api/tags', { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) throw new Error('Ollama not reachable');
+    setMode('ollama');
+    showToast('🦙 Connected to Ollama · ' + ollamaModel, 'success');
+  } catch (e) {
+    showToast('❌ Ollama not running. Start it with: ollama serve', 'error');
+  }
 }
 
 function useDemo() {
-  demoMode = true; apiKey = '';
-  setApiStatus('⚡ Demo Mode — pre-loaded Gemma 4 responses for all 4 examples', 'demo');
-  setModeBadge(true);
+  setMode('demo');
+  showToast('⚡ Switched to Demo Mode', 'success');
+}
+
+function saveKey() {
+  const val = document.getElementById('apiKeyInput')?.value?.trim();
+  if (!val) return;
+  apiKey = val; localStorage.setItem('swasthai_key', val);
+  setMode('live');
+  showToast('✅ API key saved · Live Gemma 4 enabled', 'success');
 }
 
 function setApiStatus(msg, cls) {
   const el = document.getElementById('apiStatus');
-  el.textContent = msg;
-  el.className = 'api-status ' + cls;
+  if (el) { el.textContent = msg; el.className = 'api-status ' + cls; }
 }
 
 function setModeBadge(isDemo) {
   const b = document.getElementById('apiModeBadge');
-  b.textContent = isDemo ? '⚡ Demo Mode' : '🟢 Live · Gemma 4';
-  b.className = 'api-mode-badge' + (isDemo ? '' : ' live');
+  if (b) { b.textContent = isDemo ? '⚡ Demo Mode' : '🟢 Live · Gemma 4'; b.className = 'api-mode-badge' + (isDemo ? '' : ' live'); }
 }
 
 // ── Input helpers ───────────────────────────────────────
@@ -299,10 +345,12 @@ async function analyze() {
 
   try {
     let result;
-    if (demoMode) {
-      result = await simulateGemmaResponse(input);
-    } else {
+    if (currentMode === 'ollama') {
+      result = await callOllamaAPI(input);
+    } else if (currentMode === 'live') {
       result = await callGemma4API(input);
+    } else {
+      result = await simulateGemmaResponse(input);
     }
     hideOverlay();
     renderResults(result);
@@ -315,7 +363,8 @@ async function analyze() {
   } catch (err) {
     hideOverlay();
     console.error(err);
-    showToast('Error: ' + err.message.slice(0, 80) + ' — try Demo Mode.', 'error');
+    showToast('Error: ' + err.message.slice(0, 120) + ' — switching to Demo Mode.', 'error');
+    setMode('demo');
   } finally {
     setLoading(false);
   }
@@ -356,9 +405,68 @@ async function simulateGemmaResponse(input) {
   };
 }
 
-// ── Live API ────────────────────────────────────────────
+// ── Ollama Local API ────────────────────────────────────
+async function callOllamaAPI(patientInput) {
+  const SYSTEM = buildSystemPrompt();
+  const body = {
+    model: ollamaModel,
+    messages: [
+      { role: 'system', content: SYSTEM },
+      { role: 'user',   content: 'Patient description:\n\n' + patientInput + '\n\nReturn only valid JSON.' }
+    ],
+    stream: false,
+    format: 'json',
+    options: { temperature: 0.15, num_predict: 1800 }
+  };
+
+  const resp = await fetch(ollamaBase + '/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) {
+    const e = await resp.text();
+    throw new Error('Ollama ' + resp.status + ': ' + e.slice(0, 150));
+  }
+  const data = await resp.json();
+  const raw = data.message?.content || data.response || '';
+  if (!raw) throw new Error('Empty response from Ollama');
+  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch(_) {
+    // Try to extract JSON from the response
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('Invalid JSON from Ollama — try a larger model');
+  }
+}
+
+// ── Live Gemma 4 API (Google AI Studio) ─────────────────
 async function callGemma4API(patientInput) {
-  const SYSTEM = `You are a medical intake assistant for Indian clinics. Convert patient descriptions (Gujarati/Hindi/English/mixed) into structured intake data.
+  const SYSTEM = buildSystemPrompt();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${apiKey}`;
+  const body = {
+    system_instruction: { parts: [{ text: SYSTEM }] },
+    contents: [{ role: 'user', parts: [{ text: `Patient description:\n\n${patientInput}\n\nReturn only valid JSON.` }] }],
+    generationConfig: { temperature: 0.15, maxOutputTokens: 1800, responseMimeType: 'application/json' }
+  };
+
+  const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!resp.ok) {
+    const e = await resp.text();
+    throw new Error(`API ${resp.status}: ${e.slice(0, 150)}`);
+  }
+  const data = await resp.json();
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!raw) throw new Error('Empty response from Gemma 4');
+  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  return JSON.parse(cleaned);
+}
+
+// ── Shared System Prompt ─────────────────────────────────
+function buildSystemPrompt() {
+  return `You are a medical intake assistant for Indian clinics. Convert patient descriptions (Gujarati/Hindi/English/mixed) into structured intake data.
 
 CRITICAL RULES:
 - NO diagnosis, NO treatment recommendations, NO dosage advice
@@ -396,25 +504,9 @@ Rule-based emergency triggers:
 - Breathing difficulty (severe/worsening)
 - Unresponsiveness or confusion
 - Severe bleeding
-- Signs of stroke (facial droop, arm weakness, speech)`;
+- Signs of stroke (facial droop, arm weakness, speech)
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${apiKey}`;
-  const body = {
-    system_instruction: { parts: [{ text: SYSTEM }] },
-    contents: [{ role: 'user', parts: [{ text: `Patient description:\n\n${patientInput}\n\nReturn only valid JSON.` }] }],
-    generationConfig: { temperature: 0.15, maxOutputTokens: 1800, responseMimeType: 'application/json' }
-  };
-
-  const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!resp.ok) {
-    const e = await resp.text();
-    throw new Error(`API ${resp.status}: ${e.slice(0, 150)}`);
-  }
-  const data = await resp.json();
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error('Empty response from Gemma 4');
-  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
-  return JSON.parse(cleaned);
+IMPORTANT: Return ONLY valid JSON. No markdown, no explanation, no text outside the JSON object.`;
 }
 
 // ── Render ───────────────────────────────────────────────

@@ -56,6 +56,9 @@
     </div>
   </header>
 
+  <!-- Mode Status Bar -->
+  <div id="modeBar" class="mode-bar demo">⚡ Running in Demo Mode — pre-loaded Gemma 4 responses</div>
+
   <!-- Impact Ticker -->
   <div class="ticker">
     <div class="ticker-inner">
@@ -112,6 +115,40 @@
       </div>
       <div id="apiStatus" class="api-status demo">⚡ Demo Mode — pre-loaded Gemma 4 responses for all 4 examples</div>
       <p class="api-hint">Free key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a> · Model: <code>gemma-3-27b-it</code></p>
+    </section>
+
+    <!-- Ollama Local AI Connection -->
+    <section class="card ollama-card" id="ollamaSection">
+      <div class="card-header">
+        <div class="card-icon green">🦙</div>
+        <div>
+          <h2 class="card-title">Run Locally with Ollama <span class="badge-free">FREE &amp; Offline</span></h2>
+          <p class="card-desc">Connect your local Ollama server — no API key, no internet, fully private</p>
+        </div>
+        <div class="api-mode-badge" id="apiModeBadge">⚡ Demo Mode</div>
+      </div>
+      <div class="ollama-steps">
+        <div class="ollama-step">
+          <span class="step-pill">1</span>
+          <span>Install Ollama: <a href="https://ollama.com" target="_blank">ollama.com</a></span>
+        </div>
+        <div class="ollama-step">
+          <span class="step-pill">2</span>
+          <span>Run in terminal: <code class="inline-code">ollama pull gemma2</code></span>
+        </div>
+        <div class="ollama-step">
+          <span class="step-pill">3</span>
+          <span>Start server: <code class="inline-code">ollama serve</code></span>
+        </div>
+      </div>
+      <div class="ollama-connect-row">
+        <input id="ollamaModelInput" class="api-input" placeholder="Model name (default: gemma2)" />
+        <button class="btn btn-sm btn-success" onclick="switchToOllama()">🦙 Connect Ollama</button>
+        <button class="btn btn-sm" onclick="useDemo()">⚡ Demo Mode</button>
+      </div>
+      <div class="ollama-models-hint">
+        ✅ Supported: <code>gemma2</code> · <code>llama3.2</code> · <code>mistral</code> · <code>phi3</code> · any Ollama model
+      </div>
     </section>
 
     <!-- Input Section -->
