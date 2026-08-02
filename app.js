@@ -4,11 +4,8 @@
    ============================================ */
 
 // ── State ───────────────────────────────────────────────
-let apiKey        = ''; // never persisted to localStorage
-let demoMode      = true;
-let currentMode   = 'demo'; // 'demo' | 'ollama' | 'live'
-let ollamaModel   = 'gemma2';
-let ollamaBase    = 'http://localhost:11434';
+let apiKey        = ''; // held in memory only — never persisted
+let demoMode      = true; // true = demo, false = live Gemma 4 API
 let recognition   = null;
 let isRecording   = false;
 // Only aggregate counters stored — NO patient data ever in localStorage
@@ -16,10 +13,6 @@ let totalAnalyzed  = parseInt(localStorage.getItem('swasthai_count') || '0');
 let totalEmergency = parseInt(localStorage.getItem('swasthai_emergency') || '0');
 let lastInput   = '';
 let currentTab  = 'structured';
-
-// ── Security: detect HTTPS context (Vercel/production) ──
-// Ollama runs on HTTP localhost — blocked by browsers from HTTPS pages (mixed content).
-const IS_HTTPS = location.protocol === 'https:';
 
 // ── Examples ───────────────────────────────────────────
 const EXAMPLES = [
@@ -139,95 +132,39 @@ function animateImpactNumbers() {
 
 // ── API Setup ───────────────────────────────────────────
 function initApiSection() {
-  // Always start in demo mode
-  setMode('demo');
-  // Only attempt Ollama discovery when NOT on HTTPS (mixed-content restriction)
-  if (!IS_HTTPS) {
-    checkOllamaStatus();
-  } else {
-    // On Vercel/HTTPS: show a helpful note in the Ollama panel
-    const hint = document.getElementById('ollamaModelsHint');
-    if (hint) hint.innerHTML = '⚠️ Running on HTTPS — Ollama (localhost HTTP) is blocked by browsers. <strong>Open the file locally</strong> to use Ollama.';
-  }
-}
-
-function setMode(mode) {
-  currentMode = mode;
-  demoMode = (mode === 'demo');
-  const badge = document.getElementById('apiModeBadge');
-  const modeBar = document.getElementById('modeBar');
-
-  const configs = {
-    demo:   { badge: '⚡ Demo Mode',          badgeCls: '',       barMsg: '⚡ Running in Demo Mode — pre-loaded Gemma 4 responses', barCls: 'demo' },
-    ollama: { badge: '🦙 Ollama · ' + ollamaModel, badgeCls: ' ollama', barMsg: '🦙 Connected to local Ollama (' + ollamaModel + ') — fully offline & free', barCls: 'ok' },
-    live:   { badge: '🟢 Live · Gemma 4',     badgeCls: ' live',  barMsg: '✅ Live Gemma 4 API active', barCls: 'ok' }
-  };
-  const c = configs[mode] || configs.demo;
-  if (badge) { badge.textContent = c.badge; badge.className = 'api-mode-badge' + c.badgeCls; }
-  if (modeBar) { modeBar.textContent = c.barMsg; modeBar.className = 'mode-bar ' + c.barCls; }
-}
-
-async function checkOllamaStatus() {
-  try {
-    const res = await fetch(ollamaBase + '/api/tags', { signal: AbortSignal.timeout(2000) });
-    if (!res.ok) return;
-    const data = await res.json();
-    const models = (data.models || []).map(m => m.name);
-    // Find best matching model
-    const preferred = ['gemma2', 'gemma', 'llama3', 'mistral', 'phi3'];
-    for (const p of preferred) {
-      const found = models.find(m => m.startsWith(p));
-      if (found) { ollamaModel = found; break; }
-    }
-    if (models.length > 0) {
-      setMode('ollama');
-      showToast('🦙 Ollama detected! Using ' + ollamaModel + ' locally', 'success');
-    }
-  } catch (_) {
-    // Ollama not running — stay in demo mode
-  }
-}
-
-async function switchToOllama() {
-  if (IS_HTTPS) {
-    showToast('⚠️ Ollama requires local (non-HTTPS) access. Open index.html directly.', 'warn');
-    return;
-  }
-  const modelInput = document.getElementById('ollamaModelInput');
-  if (modelInput && modelInput.value.trim()) ollamaModel = modelInput.value.trim();
-  try {
-    showToast('🦙 Connecting to Ollama…', 'success');
-    const res = await fetch(ollamaBase + '/api/tags', { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) throw new Error('Ollama not reachable');
-    setMode('ollama');
-    showToast('🦙 Connected to Ollama · ' + ollamaModel, 'success');
-  } catch (e) {
-    showToast('❌ Ollama not running. Run: ollama serve', 'error');
-  }
-}
-
-function useDemo() {
-  setMode('demo');
-  showToast('⚡ Switched to Demo Mode', 'success');
+  setModeBadge(true); // always demo on load
 }
 
 function saveKey() {
   const val = document.getElementById('apiKeyInput')?.value?.trim();
   if (!val) return;
-  // SECURITY: API key held only in memory — never written to localStorage
+  // SECURITY: key held in memory only — never written to localStorage
   apiKey = val;
-  setMode('live');
+  demoMode = false;
+  setModeBadge(false);
   showToast('✅ API key set · Live Gemma 4 enabled (session only)', 'success');
 }
 
-function setApiStatus(msg, cls) {
-  const el = document.getElementById('apiStatus');
-  if (el) { el.textContent = msg; el.className = 'api-status ' + cls; }
+function useDemo() {
+  demoMode = true;
+  apiKey = '';
+  setModeBadge(true);
+  showToast('⚡ Demo Mode active', 'success');
 }
 
 function setModeBadge(isDemo) {
-  const b = document.getElementById('apiModeBadge');
-  if (b) { b.textContent = isDemo ? '⚡ Demo Mode' : '🟢 Live · Gemma 4'; b.className = 'api-mode-badge' + (isDemo ? '' : ' live'); }
+  const badge  = document.getElementById('apiModeBadge');
+  const modeBar = document.getElementById('modeBar');
+  if (badge) {
+    badge.textContent = isDemo ? '⚡ Demo Mode' : '🟢 Live · Gemma 4';
+    badge.className   = 'api-mode-badge' + (isDemo ? '' : ' live');
+  }
+  if (modeBar) {
+    modeBar.textContent = isDemo
+      ? '⚡ Demo Mode — click any example button below to see Gemma 4 in action'
+      : '🟢 Live Mode — connected to Gemma 4 API';
+    modeBar.className = 'mode-bar ' + (isDemo ? 'demo' : 'ok');
+  }
 }
 
 // ── Input helpers ───────────────────────────────────────
@@ -360,17 +297,11 @@ async function analyze() {
   showOverlay();
 
   try {
-    let result;
-    if (currentMode === 'ollama') {
-      result = await callOllamaAPI(input);
-    } else if (currentMode === 'live') {
-      result = await callGemma4API(input);
-    } else {
-      result = await simulateGemmaResponse(input);
-    }
+    const result = demoMode
+      ? await simulateGemmaResponse(input)
+      : await callGemma4API(input);
     hideOverlay();
     renderResults(result);
-    // Update counters
     totalAnalyzed++;
     if (result.is_emergency) totalEmergency++;
     localStorage.setItem('swasthai_count', totalAnalyzed);
@@ -378,10 +309,11 @@ async function analyze() {
     updateCounters();
   } catch (err) {
     hideOverlay();
-    // SECURITY: log sanitized message only — never log patient input or API keys
+    // SECURITY: truncated message only — no patient data or keys logged
     console.warn('[SwasthAI] Analysis error:', err.message?.slice(0, 60));
-    showToast('Analysis failed — switching to Demo Mode.', 'error');
-    setMode('demo');
+    showToast('Analysis failed — falling back to Demo Mode.', 'error');
+    demoMode = true;
+    setModeBadge(true);
   } finally {
     setLoading(false);
   }
