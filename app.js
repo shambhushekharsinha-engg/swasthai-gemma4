@@ -183,16 +183,36 @@ function detectLanguageLive(text) {
     document.getElementById('langDetectBadge').classList.add('hidden');
     return;
   }
-  const hasGujarati = /[\u0A80-\u0AFF]/.test(text);
-  const hasDevanagari = /[\u0900-\u097F]/.test(text);
-  const hasLatin = /[a-zA-Z]{3,}/.test(text);
+  
+  // Basic heuristic detection for 20+ languages based on scripts
+  const scripts = {
+    Gujarati: /[\u0A80-\u0AFF]/,
+    Devanagari: /[\u0900-\u097F]/, // Hindi, Marathi, Nepali
+    Bengali: /[\u0980-\u09FF]/,    // Bengali, Assamese
+    Tamil: /[\u0B80-\u0BFF]/,
+    Telugu: /[\u0C00-\u0C7F]/,
+    Kannada: /[\u0C80-\u0CFF]/,
+    Malayalam: /[\u0D00-\u0D7F]/,
+    Gurmukhi: /[\u0A00-\u0A7F]/,   // Punjabi
+    Oriya: /[\u0B00-\u0B7F]/,
+    Arabic: /[\u0600-\u06FF\u0750-\u077F]/, // Urdu, Arabic, Persian
+    Latin: /[a-zA-Z]{3,}/
+  };
+
+  const detected = [];
+  for (const [name, regex] of Object.entries(scripts)) {
+    if (regex.test(text)) detected.push(name);
+  }
+
   let lang = '';
-  if (hasGujarati && hasLatin)       lang = '🔤 Mixed: Gujarati + English';
-  else if (hasGujarati && hasDevanagari) lang = '🔤 Mixed: Gujarati + Hindi';
-  else if (hasGujarati)              lang = '🇮🇳 Gujarati Detected';
-  else if (hasDevanagari && hasLatin)lang = '🔤 Mixed: Hindi + English';
-  else if (hasDevanagari)            lang = '🇮🇳 Hindi Detected';
-  else if (hasLatin)                 lang = '🔤 English Detected';
+  if (detected.length === 0) {
+    lang = '🌐 Unknown Language Detected';
+  } else if (detected.length === 1) {
+    lang = `🌐 ${detected[0]} Detected`;
+  } else {
+    lang = `🔤 Mixed: ${detected.join(' + ')}`;
+  }
+
   const badge = document.getElementById('langDetectBadge');
   badge.textContent = lang;
   badge.classList.toggle('hidden', !lang);
@@ -344,8 +364,12 @@ async function simulateGemmaResponse(input) {
     symptoms: ["Use one of the 4 example buttons for a full demo"], duration: "Not specified",
     existing_conditions: [], current_medications: [], allergies: "Not mentioned",
     missing_info: ["Use the 4 example buttons above or enter an API key"],
+    emergency_flags: [], doctor_note: "Demo mode fallback response. No clinical processing occurred.",
+    gujarati_summary: "આ ડેમો મોડ છે. વાસ્તવિક પરિણામ માટે API કી દાખલ કરો અથવા ઉદાહરણ બટનો વાપરો.",
+    is_emergency: false, triage_level: "normal", emergency_message: "", completeness: 0
+  };
+}
 
-// ── Live Gemma 4 API (Google AI Studio) ─────────────────
 async function callGemma4API(patientInput) {
   const SYSTEM = buildSystemPrompt();
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${apiKey}`;
@@ -355,21 +379,40 @@ async function callGemma4API(patientInput) {
     generationConfig: { temperature: 0.15, maxOutputTokens: 1800, responseMimeType: 'application/json' }
   };
 
-  const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!resp.ok) {
-    const e = await resp.text();
-    throw new Error(`API ${resp.status}: ${e.slice(0, 150)}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const resp = await fetch(endpoint, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    
+    if (!resp.ok) {
+      const e = await resp.text();
+      throw new Error(`API ${resp.status}: ${e.slice(0, 150)}`);
+    }
+    const data = await resp.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw) throw new Error('Empty response from Gemma 4');
+    
+    const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
+    return JSON.parse(cleaned);
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('API request timed out after 15 seconds. Please try again.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  const data = await resp.json();
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error('Empty response from Gemma 4');
-  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
-  return JSON.parse(cleaned);
 }
 
 // ── Shared System Prompt ─────────────────────────────────
 function buildSystemPrompt() {
-  return `You are a medical intake assistant for Indian clinics. Convert patient descriptions (Gujarati/Hindi/English/mixed) into structured intake data.
+  return `You are a medical intake assistant for Indian and global clinics. Convert patient descriptions (in any of 20+ languages including Gujarati, Hindi, English, Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam, Urdu, Punjabi, etc., or mixed) into structured intake data.
 
 CRITICAL RULES:
 - NO diagnosis, NO treatment recommendations, NO dosage advice
